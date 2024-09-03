@@ -1,55 +1,90 @@
+use anyhow::{Context, Result};
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 
-fn dynamic_array(n: usize, queries: &[(i32, i32, i32)]) -> Vec<i32> {
+struct Query {
+    typ: i32,
+    x: i32,
+    y: i32,
+}
+
+fn dynamic_array(n: usize, queries: &[Query]) -> Vec<i32> {
     let mut seq_list = vec![Vec::new(); n];
     let mut last_answer = 0;
     let mut answers = Vec::new();
 
-    for &(query_type, x, y) in queries {
-        let idx = ((x ^ last_answer) as usize) % n;
+    for query in queries {
+        let idx = ((query.x ^ last_answer) as usize) % n;
 
-        if query_type == 1 {
-            seq_list[idx].push(y);
-        } else if query_type == 2 {
-            last_answer = seq_list[idx][(y as usize) % seq_list[idx].len()];
-            answers.push(last_answer);
+        match query.typ {
+            1 => {
+                if let Some(seq) = seq_list.get_mut(idx) {
+                    seq.push(query.y);
+                }
+            }
+            2 => {
+                if let Some(seq) = seq_list.get(idx) {
+                    if let Some(&value) = seq.get((query.y as usize) % seq.len()) {
+                        last_answer = value;
+                        answers.push(last_answer);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
     answers
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let stdin = io::stdin();
-    let mut stdin_iterator = stdin.lock().lines();
+    let stdin_iterator = stdin.lock().lines();
 
     let output_path = env::var("OUTPUT_PATH").unwrap_or_else(|_| "output.txt".to_string());
-    let mut fptr = File::create(&output_path)?;
+    let mut fptr = File::create(&output_path).context("Failed to create output file")?;
 
-    // Parse the first input line for `n` and `q`
-    let first_input = stdin_iterator.next().unwrap().unwrap();
-    let mut first_input_iter = first_input.split_whitespace();
+    let mut lines = stdin_iterator.filter_map(Result::ok);
+    if let Some(first_input) = lines.next() {
+        let mut first_input_iter = first_input.split_whitespace();
+        let n = first_input_iter
+            .next()
+            .context("Failed to parse n")?
+            .parse()
+            .context("Failed to parse n as usize")?;
+        let q = first_input_iter
+            .next()
+            .context("Failed to parse q")?
+            .parse()
+            .context("Failed to parse q as usize")?;
 
-    let n: usize = first_input_iter.next().unwrap().parse().unwrap();
-    let q: usize = first_input_iter.next().unwrap().parse().unwrap();
+        let mut queries = Vec::with_capacity(q);
+        for line in lines.take(q) {
+            let mut parts = line.split_whitespace();
+            let typ = parts
+                .next()
+                .context("Failed to parse query type")?
+                .parse()
+                .context("Failed to parse query type as i32")?;
+            let x = parts
+                .next()
+                .context("Failed to parse x")?
+                .parse()
+                .context("Failed to parse x as i32")?;
+            let y = parts
+                .next()
+                .context("Failed to parse y")?
+                .parse()
+                .context("Failed to parse y as i32")?;
+            queries.push(Query { typ, x, y });
+        }
 
-    // Pre-allocate vector for queries with a tuple (query_type, x, y)
-    let mut queries = Vec::with_capacity(q);
-    for _ in 0..q {
-        let line = stdin_iterator.next().unwrap().unwrap();
-        let mut parts = line.split_whitespace();
-        let query_type = parts.next().unwrap().parse().unwrap();
-        let x = parts.next().unwrap().parse().unwrap();
-        let y = parts.next().unwrap().parse().unwrap();
-        queries.push((query_type, x, y));
-    }
+        let result = dynamic_array(n, &queries);
 
-    let result = dynamic_array(n, &queries);
-
-    for answer in result {
-        writeln!(fptr, "{}", answer)?;
+        for answer in result {
+            writeln!(fptr, "{}", answer).context("Failed to write to output file")?;
+        }
     }
 
     Ok(())
