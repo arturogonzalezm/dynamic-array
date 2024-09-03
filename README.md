@@ -58,7 +58,7 @@ To run the program:
     - First line: Two space-separated integers `n` and `q` (number of sequences and number of queries).
     - Next `q` lines: Three space-separated integers representing each query.
 
-Example:
+Input example:
 
 ```
 2 5
